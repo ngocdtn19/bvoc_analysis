@@ -1,0 +1,8 @@
+fig/*
+plot_corr/*
+plot_corr-old/*
+data/*
+data-other/*
+*/__pycache__/
+*/.vscode/*
+*/models/*
