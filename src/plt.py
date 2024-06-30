@@ -1,3 +1,4 @@
+# %%
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -12,8 +13,7 @@ from sklearn.metrics import mean_squared_error
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.lines import Line2D
 from mypath import *
-from mk import *
-
+import mk
 
 colors_dict = {
     "co2": "#8da0cb",
@@ -66,44 +66,32 @@ legend_sz = 14
 unit_sz = 12
 
 
-# Plot cross-validation
-def plt_cross_val_metrics():
-    cmip6_models = model_orders[1:]
-    l_score = []
-    for m in cmip6_models:
-        cv_metric_file = f"./cv/{m}.pkl"
-        with open(cv_metric_file, "rb") as f:
-            cv_metrics = pickle.load(f)
-            df = pd.DataFrame(cv_metrics)
-            df["model_names"] = m
-            l_score.append(df)
-    concat_df = pd.concat(l_score, ignore_index=True)
-    l_score_names = ["r2", "rmse", "mae"]
-    ylabels = [" ", "[$gC  m^{-2}  yr^{-1}$]", "[$gC  m^{-2}  yr^{-1}$]"]
-    titles = ["R$^{2}$", "RMSE", "MAE"]
-    rows = 1
-    cols = 3
-    fig, axes = plt.subplots(
-        rows,
-        cols,
-        figsize=(3 * cols, 4.5 * rows),
-        layout="constrained",
+# Plot Fig. 1a - Mean global isoprene emission in the present day (2000-2014)
+def plt_mean_glob_pd(emiisop):
+    model_names = list(emiisop.multi_models.keys())
+    df = pd.DataFrame()
+    for name in model_names:
+        df[name] = emiisop.multi_models[name].global_rate.sel(year=slice(2000, 2014))
+    fig, ax = plt.subplots(figsize=(6, 5.5), layout="constrained")
+    sns.barplot(
+        df,
+        ax=ax,
+        palette=sns.color_palette(
+            [
+                "#94C973",
+                "#fdbf6f",
+                "#fb9a99",
+                "#478C5C",
+                "#9467BD",
+                "#e41a1c",
+            ]
+        ),
+        errorbar="sd",
+        width=0.6,
     )
-    for i, (s, ylabel, t) in enumerate(zip(l_score_names, ylabels, titles)):
-        c = i % cols
-        ax = axes[c]
-        barplot = sns.barplot(
-            concat_df,
-            x="model_names",
-            y=s,
-            ax=ax,
-            palette=sns.color_palette("Set3"),
-            width=0.65,
-        )
-        ax.set_xticklabels(cmip6_models, rotation=90)
-        ax.set_xlabel("")
-        ax.set_ylabel(ylabel)
-        ax.set_title(t)
+    ax.set_ylim([0, 600])
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_ylabel("[$TgC yr^{-1}$]", fontsize=unit_sz, fontweight="bold")
 
 
 # Plot Fig. 1b - regional contribution for present-day (2000-2014)
@@ -143,13 +131,14 @@ def plt_regional_contri(emiisop):
         bbox_to_anchor=(0.5, 0.5, 0.7, 0.1),
         borderaxespad=0.0,
     )
+    ax.set_ylim([0, 600])
     ax.set_ylabel(
         VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=unit_sz, fontweight="bold"
     )
 
 
 # Plot Fig. 2 - spatial distribution of the mean annual totals of isoprene emission in the present day (2000-2014)
-def plt_glob_present_map(emiisop, cmap="YlGn"):
+def plt_glob_present_map(emiisop, cmap="YlGnBu"):
     list_models = [
         "VISIT-S3(G1997)",
         "CESM2-WACCM(G2012)",
@@ -202,7 +191,88 @@ def plt_glob_present_map(emiisop, cmap="YlGn"):
     cbar.set_label("[$gC  m^{-2}  yr^{-1}$]", size=unit_sz)
 
 
-# Plot Fig.5 - Spatial distribution of isoprene emission trends from 1850 to 2014
+# Plot Fig. 3 - Mean annual isoprene emission by lat
+def plt_pd_mean_by_lat(emiisop):
+    l_m_names = list(emiisop.multi_models.keys())
+    colors = [
+        "#94C973",
+        "#fdbf6f",
+        "#fb9a99",
+        "#478C5C",
+        "#9467BD",
+        "#e41a1c",
+    ]
+    colors_dict = {m_name: c for m_name, c in zip(l_m_names, colors[: len(l_m_names)])}
+    lss = ["-", "-.", "-", "--", "-", "-"]
+    ls_dict = {m_name: c for m_name, c in zip(l_m_names, lss[: len(l_m_names)])}
+    fig, ax = plt.subplots(figsize=(9.5, 6.5), layout="constrained")
+    axbox = ax.get_position()
+    for m_name in l_m_names:
+        org_ds = (
+            emiisop.multi_models[m_name]
+            .annual_per_area_unit.sel(year=slice(2000, 2014))
+            .mean(dim="year")
+        )
+        ds = org_ds.mean(dim="lon")
+        ds = ds.sel(lat=np.arange(-90, 90, 5), method="nearest")
+        ax.plot(
+            ds.lat,
+            ds,
+            label=m_name,
+            linewidth=2.5,
+            color=colors_dict[m_name],
+            ls=ls_dict[m_name],
+        )
+        ax.set_xlabel("Latitude")
+        ax.set_ylabel(
+            VIZ_OPT[emiisop.var_name]["map_unit"], fontsize=14, fontweight="bold"
+        )
+        plt.ylim([0, 5])
+        ax.legend(
+            loc="center",
+            ncol=3,
+            bbox_to_anchor=[axbox.x0 + 0.5 * axbox.width, axbox.y0 - 0.25],
+        )
+
+
+# Plot Fig. 4 - Interannual variations in global isoprene emission over 1850–2014
+def plt_glob_annual_variation(emiisop):
+    model_names = list(emiisop.multi_models.keys())
+    colors = [
+        "#94C973",
+        "#fdbf6f",
+        "#fb9a99",
+        "#478C5C",
+        "#9467BD",
+        "#e41a1c",
+    ]
+    colors_dict = {
+        m_name: c for m_name, c in zip(model_names, colors[: len(model_names)])
+    }
+    lss = ["-", "-.", "-", "--", "-", "-"]
+    ls_dict = {m_name: c for m_name, c in zip(model_names, lss[: len(model_names)])}
+    fig, ax = plt.subplots(figsize=(9.5, 6.5), layout="constrained")
+    axbox = ax.get_position()
+    for m_name in model_names:
+        cmip6_obj = emiisop.multi_models[m_name]
+        x, y = cmip6_obj.global_rate["year"], cmip6_obj.global_rate
+        ax.plot(
+            x,
+            y,
+            label=m_name,
+            linewidth=2.5,
+            color=colors_dict[m_name],
+            ls=ls_dict[m_name],
+        )
+    ax.set_xlabel("Year")
+    ax.set_ylabel(
+        VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=14, fontweight="bold"
+    )
+    ax.legend(
+        loc="center",
+        ncol=3,
+        bbox_to_anchor=[axbox.x0 + 0.5 * axbox.width, axbox.y0 - 0.25],
+    )
 
 
 def cal_org_trends_map(var_obj, var_name, model_name):
@@ -217,13 +287,15 @@ def cal_org_trends_map(var_obj, var_name, model_name):
             dims="year",
             coords={"year": annual_ds["year"]},
         )
-        slope = mk.kendall_correlation(annual_ds, y, "year")
+        slope = xr.Dataset({})
+        slope[var_name] = mk.kendall_correlation(annual_ds, y, "year")
         slope.to_netcdf(file_mk_org)
     else:
         slope = xr.open_dataset(file_mk_org)
     return slope
 
 
+# Plot Fig.5 - Spatial distribution of isoprene emission trends from 1850 to 2014
 def plt_glob_trends_map_emiisop(emiisop, cmap="bwr"):
     list_models = [
         "VISIT-S3(G1997)",
@@ -410,7 +482,7 @@ def plt_contri_map(models, visit, mode="main"):
     models["VISIT(G1997)"] = visit
     cmap = "bwr"
     vmin, vmax = -15, 15
-    fig = plt.figure(layout="constrained", figsize=(3.5 * 4, 3.5 * 4))
+    fig = plt.figure(layout="constrained", figsize=(4 * 4, 4 * 4))
     subfigs = fig.subfigures(6, 1, hspace=0.1)
     if mode == "main":
         for n, m in enumerate(model_orders):
@@ -418,7 +490,16 @@ def plt_contri_map(models, visit, mode="main"):
             axis = subfigs[n].subplots(
                 1, 3, subplot_kw=dict(projection=ccrs.PlateCarree())
             )
-            subfigs[n].suptitle(m, fontsize=title_sz)
+            subfigs[n].suptitle(
+                m,
+                fontsize=legend_sz,
+                rotation=90,
+                ha="left",
+                va="center",
+                x=-0.02,
+                y=0.5,
+                fontweight="bold",
+            )
             for i, f in enumerate(pred_fields):
                 ax = axis[i]
                 if len(pred_fields) < 3:
@@ -447,10 +528,10 @@ def plt_contri_map(models, visit, mode="main"):
 
         axins = inset_axes(
             axis[1],
-            width="100%",  # width: 5% of parent_bbox width
+            width="120%",  # width: 5% of parent_bbox width
             height="20%",  # height: 50%
             loc="center",
-            bbox_to_anchor=(0, -1, 1, 1),
+            bbox_to_anchor=(0, -0.9, 1, 1),
             bbox_transform=axis[1].transAxes,
             borderpad=0,
         )
@@ -464,9 +545,9 @@ def plt_contri_map(models, visit, mode="main"):
         # bbox_transform=axis[1].transAxes,
         # borderpad=0,
         # )
-        subfigs[-1].text(0.15, -0.1, "(a) CO$_2$", fontsize=title_sz, fontweight="bold")
-        subfigs[-1].text(0.45, -0.1, "(b) LULCC", fontsize=title_sz, fontweight="bold")
-        subfigs[-1].text(0.8, -0.1, "(c) Clim", fontsize=title_sz, fontweight="bold")
+        subfigs[0].text(0.125, 1, "(a) CO$_2$", fontsize=title_sz, fontweight="bold")
+        subfigs[0].text(0.455, 1, "(b) LULCC", fontsize=title_sz, fontweight="bold")
+        subfigs[0].text(0.79, 1, "(c) Climate", fontsize=title_sz, fontweight="bold")
     else:
         vmin, vmax = -2.5, 2.5
         for n, m in enumerate(model_orders):
@@ -474,7 +555,16 @@ def plt_contri_map(models, visit, mode="main"):
             axis = subfigs[n].subplots(
                 1, 3, subplot_kw=dict(projection=ccrs.PlateCarree())
             )
-            subfigs[n].suptitle(m, fontsize=title_sz)
+            subfigs[n].suptitle(
+                m,
+                fontsize=legend_sz,
+                rotation=90,
+                ha="left",
+                va="center",
+                x=-0.02,
+                y=0.5,
+                fontweight="bold",
+            )
             for i, f in enumerate(pred_fields):
                 ax = axis[i]
                 ax.coastlines()
@@ -495,21 +585,19 @@ def plt_contri_map(models, visit, mode="main"):
 
         axins = inset_axes(
             axis[1],
-            width="100%",  # width: 5% of parent_bbox width
+            width="120%",  # width: 5% of parent_bbox width
             height="20%",  # height: 50%
             loc="center",
-            bbox_to_anchor=(0, -1, 1, 1),
+            bbox_to_anchor=(0, -0.9, 1, 1),
             bbox_transform=axis[1].transAxes,
             borderpad=0,
         )
-        subfigs[-1].text(
-            0.09, -0.1, "(a) Temperature", fontsize=title_sz, fontweight="bold"
+        subfigs[0].text(0.1, 1, "(a) Temperature", fontsize=title_sz, fontweight="bold")
+        subfigs[0].text(
+            0.41, 1, "(b) Shortwave radiation", fontsize=title_sz, fontweight="bold"
         )
-        subfigs[-1].text(
-            0.39, -0.1, "(b) Shortwave radiation", fontsize=title_sz, fontweight="bold"
-        )
-        subfigs[-1].text(
-            0.76, -0.1, "(c) Precipitation", fontsize=title_sz, fontweight="bold"
+        subfigs[0].text(
+            0.77, 1, "(c) Precipitation", fontsize=title_sz, fontweight="bold"
         )
 
     cbar = fig.colorbar(sm, cax=axins, shrink=1, orientation="horizontal")
@@ -674,12 +762,6 @@ def plt_inter_model_spreads(cmap="OrRd"):
             levels=11,
             vmin=vmin,
             vmax=vmax[c],
-            # extend="both",
-            # cbar_kwargs={
-            #     "label": "[$mgC  m^{-2}  yr^{-2}$]",
-            #     "orientation": "horizontal",
-            #     "pad": 0.05,
-            # },
             add_colorbar=False,
         )
         ax.set_title(t)
@@ -692,7 +774,47 @@ def plt_inter_model_spreads(cmap="OrRd"):
         cbar.set_label("[$mgC  m^{-2}  yr^{-2}$]", size=unit_sz)
 
 
-# sup plt RF validation
+# sup plt Fig S1 cross-validation
+def plt_cross_val_metrics():
+    cmip6_models = model_orders[1:]
+    l_score = []
+    for m in cmip6_models:
+        cv_metric_file = f"./cv/{m}.pkl"
+        with open(cv_metric_file, "rb") as f:
+            cv_metrics = pickle.load(f)
+            df = pd.DataFrame(cv_metrics)
+            df["model_names"] = m
+            l_score.append(df)
+    concat_df = pd.concat(l_score, ignore_index=True)
+    l_score_names = ["r2", "rmse", "mae"]
+    ylabels = [" ", "[$gC  m^{-2}  yr^{-1}$]", "[$gC  m^{-2}  yr^{-1}$]"]
+    titles = ["R$^{2}$", "RMSE", "MAE"]
+    rows = 1
+    cols = 3
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(3 * cols, 4.5 * rows),
+        layout="constrained",
+    )
+    for i, (s, ylabel, t) in enumerate(zip(l_score_names, ylabels, titles)):
+        c = i % cols
+        ax = axes[c]
+        barplot = sns.barplot(
+            concat_df,
+            x="model_names",
+            y=s,
+            ax=ax,
+            palette=sns.color_palette("Set3"),
+            width=0.65,
+        )
+        ax.set_xticklabels(cmip6_models, rotation=90)
+        ax.set_xlabel("")
+        ax.set_ylabel(ylabel)
+        ax.set_title(t)
+
+
+# sup plt Fig S2 RF validation
 def sup_plt_glob_rate(models):
     rows = 2
     cols = 3
@@ -748,3 +870,73 @@ def sup_plt_glob_rate(models):
         bbox_to_anchor=(0.5, -0.01),
         fontsize=legend_sz,
     )
+
+
+# plot Fig. S5 - Global annual anomalies of tas, rsds, pr --> not yet done
+def plt_clim_annual_anomaly(tas, rsds, pr):
+    model_names = list(tas.multi_models.keys())
+    colors = [
+        "#94C973",
+        "#fdbf6f",
+        "#fb9a99",
+        "#478C5C",
+        "#9467BD",
+        "#e41a1c",
+    ]
+    colors_dict = {
+        m_name: c for m_name, c in zip(model_names, colors[: len(model_names)])
+    }
+    lss = ["-", "-.", "-", "--", "-", "-"]
+    ls_dict = {m_name: c for m_name, c in zip(model_names, lss[: len(model_names)])}
+    l_var = ["tas", "rsds", "pr"]
+    list_index = [
+        "(a) Temperature",
+        "(b) Shortwave radiation",
+        "(c) Precipitation",
+    ]
+    rows = 3
+    cols = 1
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        sharex=True,
+        figsize=(7 * cols, 4 * rows),
+        layout="constrained",
+    )
+    for i, (v, t) in enumerate(zip(l_var, list_index)):
+        r = i % rows
+        ax = axes[r]
+        if v == "tas":
+            data = tas
+        elif v == "rsds":
+            data = rsds
+        else:
+            data = pr
+        for m_name in model_names:
+            cmip6_obj = data.multi_models[m_name]
+            x, y = cmip6_obj.global_rate_anml["year"], cmip6_obj.global_rate_anml
+            ax.plot(
+                x,
+                y,
+                label=m_name,
+                linewidth=2.5,
+                color=colors_dict[m_name],
+                ls=ls_dict[m_name],
+            )
+        ax.set_xlabel(" ")
+        ax.set_ylabel(
+            VIZ_OPT[data.var_name]["line_bar_unit"], fontsize=unit_sz, fontweight="bold"
+        )
+        ax.annotate(t, (0.005, 0.025), xycoords="axes fraction", fontsize=unit_sz)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        ncol=3,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0),
+        fontsize=legend_sz,
+    )
+
+
+# %%

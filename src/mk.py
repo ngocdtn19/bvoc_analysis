@@ -1,4 +1,4 @@
-import pymannkendall as mk
+import pymannkendall as pymk
 import xarray as xr
 import numpy as np
 
@@ -17,7 +17,7 @@ def k_cor(x, y, pthres=0.05, direction=True):
     if co < 4:  # If fewer than 4 observations return -9999
         return "nan"
     # Run the kendalltau test
-    trend, h, p, z, Tau, s, var_s, slope, intercept = mk.original_test(x)
+    trend, h, p, z, Tau, s, var_s, slope, intercept = pymk.original_test(x)
 
     # Criterium to return results in case of Significance
     return slope if p < pthres else "nan"

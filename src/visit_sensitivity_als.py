@@ -32,9 +32,17 @@ def cal_mk(ds, var_name):
 
 class VisitSenAls:
     base_dir = VISIT_DIR
-    list_sim = ["control", "co2f", "co2f_clim", "co2f_clim_lulcc"]
-    list_driver = ["co2f", "lulcc", "clim", "all"]
+    list_sim = [
+        "control",
+        "co2f",
+        "co2f_clim",
+        "co2f_clim_lulcc",
+        "co2f_lulcc_rsds_pr",
+        "co2f_lulcc_tas_pr",
+        "co2f_lulcc_tas_rsds",
+    ]
     list_main_driver = ["co2f", "lulcc", "clim"]
+    clim_predictors = ["tas", "rsds", "pr"]
 
     def __init__(self, var_name="emiisop") -> None:
         self.var_name = var_name
@@ -51,11 +59,13 @@ class VisitSenAls:
         self.main_df_rate = pd.DataFrame()
 
         self.load_data()
-        self.cal_driver_mk()
-        self.cal_glob_change_ts()
-        self.plt_glob_rate_drivers()
-        self.plt_glob_driver_pixel()
-        self.plt_glob_rate()
+        self.contribution_mk_cal()
+
+        self.main_rates_ts, self.main_df_rate = self.cal_glob_change_ts("main")
+        self.clim_rates_ts, self.clim_df_rate = self.cal_glob_change_ts("clim")
+
+        self.ctb_main_map, self.mk_impact_area_df = self.max_impact_cal("main")
+        self.ctb_clim_map, self.mk_impact_area_df = self.max_impact_cal("clim")
 
     def load_data(self):
         for v in self.list_sim:
@@ -65,6 +75,10 @@ class VisitSenAls:
         clim = xr.Dataset({})
         lulcc = xr.Dataset({})
         cml = xr.Dataset({})
+
+        tas = xr.Dataset({})
+        rsds = xr.Dataset({})
+        pr = xr.Dataset({})
 
         co2f[self.var_name] = (
             self.ds_vars["co2f"][self.var_name] - self.ds_vars["control"][self.var_name]
@@ -85,32 +99,63 @@ class VisitSenAls:
             - self.ds_vars["control"][self.var_name]
         )
 
+        tas[self.var_name] = (
+            self.ds_vars["co2f_clim_lulcc"][self.var_name]
+            - self.ds_vars["co2f_lulcc_rsds_pr"][self.var_name]
+        )
+        rsds[self.var_name] = (
+            self.ds_vars["co2f_clim_lulcc"][self.var_name]
+            - self.ds_vars["co2f_lulcc_tas_pr"][self.var_name]
+        )
+        pr[self.var_name] = (
+            self.ds_vars["co2f_clim_lulcc"][self.var_name]
+            - self.ds_vars["co2f_lulcc_tas_rsds"][self.var_name]
+        )
+
         self.ds_vars["clim"] = clim
         self.ds_vars["lulcc"] = lulcc
         self.ds_vars["co2f"] = co2f
         self.ds_vars["all"] = cml
 
-    def cal_glob_change_ts(self):
-        self.rates_ts = []
+        self.ds_vars["tas"] = tas
+        self.ds_vars["rsds"] = rsds
+        self.ds_vars["pr"] = pr
+
+    def get_list_driver(self, mode):
+        list_driver = self.list_main_driver + ["all"]
+        if mode != "main":
+            list_driver = self.clim_predictors + ["clim"]
+
+        return list_driver
+
+    def cal_glob_change_ts(self, mode):
+
+        list_driver = self.get_list_driver(mode)
+
+        driver_df_rate = pd.DataFrame()
+        rate_ts = []
         slope_ts = []
         sig_ts = []
-        for var in self.list_driver:
+        for var in list_driver:
             ds = self.ds_vars[var][self.var_name]
-            glob_rate_ts, glob_change_ts = cal_actual_rate(ds, "VISIT", mode="ts")
-            self.rates_ts.append(glob_rate_ts)
+            glob_rate_ts, _ = cal_actual_rate(ds, "VISIT", mode="ts")
+            rate_ts.append(glob_rate_ts)
             trend_test = pymk.original_test(glob_rate_ts.values, alpha=0.05)
             slope_ts.append(trend_test.slope)
             sig_ts.append(trend_test.h)
-        self.main_rates_ts = pd.DataFrame(
-            {var: rate for var, rate in zip(self.list_driver, self.rates_ts)},
+        driver_rates_ts = pd.DataFrame(
+            {var: rate for var, rate in zip(list_driver, rate_ts)},
             index=[i for i in range(1850, 2015)],
         )
-        self.main_df_rate["driver"] = self.list_driver
-        self.main_df_rate["slope"] = slope_ts
-        self.main_df_rate["sig"] = sig_ts
+        driver_df_rate["driver"] = list_driver
+        driver_df_rate["slope"] = slope_ts
+        driver_df_rate["sig"] = sig_ts
 
-    def cal_driver_mk(self):
-        for v in self.list_driver:
+        return driver_rates_ts, driver_df_rate
+
+    def contribution_mk_cal(self):
+        list_driver = self.list_main_driver + self.clim_predictors
+        for v in list_driver:
             print(v)
             file_path_org = os.path.join(self.base_dir, "mk_0.5x0.5", f"{v}.nc")
             file_path_interp = os.path.join(
@@ -133,45 +178,35 @@ class VisitSenAls:
                 interpolate(ds).to_netcdf(file_path_interp)
 
             self.contribution_mk[v] = self.org_mk[v].sel(lat=slice(82.75, -55.25))
-        self.ctb_main_map, self.mk_impact_area_df = self.cal_drivers_pixel_level(
-            self.contribution_mk
-        )
 
-    def cal_drivers_pixel_level(self, ds_pixel):
-        clim = ds_pixel["clim"].values
-        lulcc = ds_pixel["lulcc"].values
-        co2f = ds_pixel["co2f"].values
+    def max_impact_cal(self, mode):
 
-        # co2 clim luc
-        cml = ds_pixel["all"].values
+        list_driver = self.list_main_driver if mode == "main" else self.clim_predictors
 
         # make mask without nan values
-        valid_mask = np.zeros(clim.shape)
-        for arr in ds_pixel.values():
+        valid_mask = np.zeros(self.contribution_mk[list_driver[0]].shape)
+        for arr in self.contribution_mk.values():
             arr = np.nan_to_num(arr.values)
             arr[arr != 0] = 1
             valid_mask += arr
         valid_mask[valid_mask < 1] = np.nan
         valid_mask[valid_mask > 0] = 1
 
-        # cal max impact of driver with same sign with cml
-        stacked = np.stack((co2f, lulcc, clim), axis=-1)
+        stacked = np.stack(tuple(self.contribution_mk[v] for v in list_driver), axis=-1)
         stacked = np.nan_to_num(stacked)
         abs_stacked = np.absolute(stacked)
         max_stacked = np.nanargmax(abs_stacked, axis=-1)
 
         driver_arr = max_stacked * valid_mask
         coords = {
-            "lon": ds_pixel["clim"].lon.values,
-            "lat": ds_pixel["clim"].lat.values,
+            "lon": self.contribution_mk[list_driver[0]].lon.values,
+            "lat": self.contribution_mk[list_driver[0]].lat.values,
         }
 
         driver_abs_pixel = xr.Dataset(
             {"driver": (("lat", "lon"), driver_arr)}, coords=coords
         )
 
-        # cal dominant impact by area
-        list_pred = ["co2f", "lulcc", "clim"]
         # --- aggregate the impact by area ---
         processed_area = prep_area(driver_abs_pixel["driver"], "VISIT") * valid_mask
         processed_area = processed_area.to_dataset().assign(
@@ -179,131 +214,19 @@ class VisitSenAls:
         )
         area_dict = {}
         total_a = 0
-        for v, f in enumerate(list_pred):
+        for v, f in enumerate(list_driver):
             area = processed_area.where(processed_area["driver"] == v, drop=True)
             area = area["areacella"].sum(["lat", "lon"]).item()
             area_dict[f] = area
             total_a += area
 
-        impact_by_area = [area_dict[f] * 100 / total_a for f in list_pred]
+        impact_by_area = [area_dict[f] * 100 / total_a for f in list_driver]
         impact_area_df = pd.DataFrame()
         impact_area_df["percentage"] = impact_by_area
-        impact_area_df["driver"] = list_pred
+        impact_area_df["driver"] = list_driver
 
         return driver_abs_pixel, impact_area_df
 
-    def plt_glob_rate_drivers(self):
-        fig, ax = plt.subplots(1, 1, figsize=(3, 4), layout="constrained")
-        barplot = sns.barplot(
-            self.main_df_rate,
-            x="driver",
-            y="slope",
-            ax=ax,
-            palette=sns.color_palette(["#8da0cb", "#b3de69", "#fb8072", "#66c2a5"]),
-        )
-        for p, sig in zip(barplot.patches, self.main_df_rate["sig"]):
-            if sig == True:
-                h = p.get_height()
-                add_h = 0.1
-                h = h if h > 0 else h - add_h
-                barplot.text(p.get_x() + p.get_width() / 2.0, h, "*", ha="center")
-                print(h)
-        ax.set_title("VISIT(G1997)")
-        ax.set_xlabel(" ")
-        ax.set_ylabel("Isoprene emission trends [$TgC yr^{-2}$]")
-        ax.set_ylim(-1, 1)
-
-    def plt_glob_driver_pixel(self):
-        drivers = ["co2", "lulcc", "clim"]
-        visit_land = xr.open_dataset(
-            "/mnt/dg3/ngoc/cmip6_bvoc_als/data/axl/mask/mask_fx_VISIT-S3(G1997)_historical_r1i1p1f1_gn.nc"
-        )
-        land_mask = visit_land.where(visit_land.mask != np.nan, 1)
-        abs_driver = self.ctb_main_map
-        abs_driver = abs_driver.fillna(len(drivers))
-        abs_driver = abs_driver * land_mask["mask"]
-        abs_driver = abs_driver.sel(lat=slice(82.75, -55.25))
-
-        fig = plt.figure(figsize=(3.75, 5))
-        ax = plt.subplot(1, 1, 1, projection=ccrs.PlateCarree())
-        ax.coastlines()
-        title = f"VISIT(G1997)"  # - Dominant driver of trends in {self.var_name}"
-        cmap = matplotlib.colors.ListedColormap(
-            ["#beaed4", "#b3de69", "#fb9a99", "lightgrey"]
-        )
-        center = [0.5 * (i * 2 + 1) for i in range(len(drivers) + 1)]
-        cax = abs_driver["driver"].plot(
-            cmap=cmap,
-            vmin=0,
-            vmax=len(drivers) + 1,
-            ax=ax,
-            add_colorbar=False,
-        )
-        cbar = fig.colorbar(
-            cax,
-            ticks=center,
-            orientation="horizontal",
-            pad=0.05,
-        )
-        cbar.ax.set_xticklabels(drivers + ["nan"], size=11)
-        cbar.set_label(label="Dominant driver", size=9, weight="bold")
-        plt.title(title, fontsize=11)
-
-    def plt_contri_map(self, vmin=-15, vmax=15):
-        i = 0
-        for f in self.list_main_driver:
-            i = i + 1
-            fig = plt.figure(1 + i, figsize=(3.75, 5))
-            ax = plt.subplot(1, 1, 1, projection=ccrs.PlateCarree())
-            ax.coastlines()
-            title = (
-                f"VISIT(G1997)"  # - Contribution of {f} to the {self.var_name} trends"
-            )
-            data = self.contribution_mk[f] * 1e3
-            # data = data.sel(lat=slice(82.75, -55.25))
-            data.plot.pcolormesh(
-                ax=ax,
-                cmap="bwr",
-                levels=11,
-                vmin=vmin,
-                vmax=vmax,
-                extend="both",
-                cbar_kwargs={
-                    "label": "[$mgC m^{-2} yr^{-2}$]",
-                    "orientation": "horizontal",
-                    "pad": 0.05,
-                },
-            )
-            plt.title(title, fontsize=11)
-
-    def plt_glob_rate(self):
-        colors_list = ["#8da0cb", "#b3de69", "#fb8072", "#66c2a5"]
-        colors_dict = {
-            m_name: c
-            for m_name, c in zip(self.list_driver, colors_list[: len(self.list_driver)])
-        }
-        lss = ["-", "-", "-", "--"]
-        ls_dict = {
-            m_name: c
-            for m_name, c in zip(self.list_driver, lss[: len(self.list_driver)])
-        }
-        # lines = df.plot.line()
-        fig, ax = plt.subplots(figsize=(5.5, 3.75), layout="constrained")
-        axbox = ax.get_position()
-        for v in self.list_driver:
-            obj = self.main_rates_ts[v]
-            x, y = obj.index, obj.values
-            ax.plot(x, y, label=v, lw=2.5, color=colors_dict[v], ls=ls_dict[v])
-        # ax.set_xlabel("Year", fontweight="bold", fontsize=14)
-        ax.set_ylabel("Isoprene emission changes [$TgC  yr^{-1}$]")
-        ax.set_ylim([-160, 110])
-        ax.set_title(f"VISIT(G1997)")  # - Drivers of Annual Trend of {self.var_name}")
-        ax.legend(
-            loc="center",
-            ncol=len(self.list_driver),
-            bbox_to_anchor=[axbox.x0 + 0.5 * axbox.width, axbox.y0 - 0.25],
-        )
-
 
 # %%
-a = VisitSenAls()
+visit = VisitSenAls()
