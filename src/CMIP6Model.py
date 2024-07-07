@@ -58,6 +58,16 @@ class Model(ModelVar):
         self.extract_vars()
 
     def get_var_ds(self, var_name):
+        """
+        Load and concat data to make xr.Dataset from inputfiles
+
+        Params:
+        var_name (str):  varibale name
+
+        Returns:
+        xr.Dataset: timeseires data of the variable
+
+        """
         var_files = sorted(glob.glob(os.path.join(VAR_DIR, var_name, "*.nc")))
         model_files = [f for f in var_files if self.model_name in f]
         l_model_ds = []
@@ -1482,7 +1492,7 @@ class Var(ModelVar):
 class Land:
     processed_dir = os.path.join(DATA_DIR, "processed_data")
 
-    def __init__(self, model_name="UKESM1-0-LL", mon_type="Emon") -> None:
+    def __init__(self, model_name="UKESM1-0-LL", mon_type="Lmon") -> None:
         self.model_name = model_name
         self.mon_type = mon_type
 
@@ -1546,9 +1556,8 @@ class Land:
     def clip_2_roi(self, boundary_dict={}):
         land_types = sorted(list(self.org_cell_objs.keys()))
 
-        # for i, roi in enumerate(ROI_DICT.keys()):
         for i, roi in enumerate(
-            LIST_REGION
+            LIST_REGION_LAND
         ):  # update with region mask ar6.land/serex, change interested LIST_REGION to all regions if use plot_global_annual_trend
             self.roi_ltype[roi] = {}
 
@@ -1557,13 +1566,7 @@ class Land:
             ds_area.coords["lon"] = (ds_area.coords["lon"] + 180) % 360 - 180
             ds_area = ds_area.sortby(ds_area.lon)
             ds_area = ds_area.rio.set_spatial_dims("lon", "lat", inplace=True)
-            # self.roi_area[roi] = ds_area.rio.clip_box(
-            #     minx=ROI_DICT[roi]["min_lon"],
-            #     miny=ROI_DICT[roi]["min_lat"],
-            #     maxx=ROI_DICT[roi]["max_lon"],
-            #     maxy=ROI_DICT[roi]["max_lat"],
-            #     # crs=self.crs,
-            # ).sum(["lat", "lon"])
+
             self.roi_area[roi] = clip_region_mask(ds_area, roi).sum(["lat", "lon"])
 
             fig, ax = plt.subplots(figsize=(4.5, 4), layout="constrained")
@@ -1572,17 +1575,6 @@ class Land:
             for ltype in land_types:
                 ds = copy.deepcopy(self.area_weighted_cell_obj[ltype])
                 ds = ds.rio.set_spatial_dims("lon", "lat", inplace=True)
-                # self.roi_ltype[roi][ltype] = (
-                #     ds.rio.clip_box(
-                #         minx=ROI_DICT[roi]["min_lon"],
-                #         miny=ROI_DICT[roi]["min_lat"],
-                #         maxx=ROI_DICT[roi]["max_lon"],
-                #         maxy=ROI_DICT[roi]["max_lat"],
-                #         # crs=self.crs,
-                #     ).sum(["lat", "lon"])
-                #     / self.roi_area[roi]
-                #     * 1e2
-                # )
                 self.roi_ltype[roi][ltype] = (
                     (clip_region_mask(ds, roi).sum(["lat", "lon"]))
                     / self.roi_area[roi]
@@ -1591,16 +1583,16 @@ class Land:
                 self.roi_ltype[roi][ltype].sel(
                     time=self.roi_ltype[roi][ltype].time.dt.month.isin([12])
                 ).plot(ax=ax, label=ltype)
-            plt.title(roi, fontsize=18)
-            axbox = ax.get_position()
-            ax.legend(
-                fontsize="small",
-                loc="upper left",
-                ncol=1,
-                bbox_to_anchor=(1.0, 0.72),
-            )
-            ax.set_xlabel("Year")
-            ax.set_ylabel("(%)")
+            # plt.title(roi, fontsize=18)
+            # axbox = ax.get_position()
+            # ax.legend(
+            #     fontsize="small",
+            #     loc="upper left",
+            #     ncol=1,
+            #     bbox_to_anchor=(1.0, 0.72),
+            # )
+            # ax.set_xlabel("Year")
+            # ax.set_ylabel("(%)")
             # plt.savefig(os.path.join("../fig/", self.model_name, f"{roi}-luc.png"))
 
     def plot_mk(self, sy, ey, ltype, cmap="RdBu_r"):
@@ -1641,24 +1633,24 @@ class Land:
         #     os.path.join("../fig/", self.model_name, f"mk-{ltype}-{sy}-{ey}.png")
         # )
 
-    def plot_global_annual_trend(self):
-        land_types = sorted(list(self.org_cell_objs.keys()))
-        total_larea = self.ds_area.sum(dim=[DIM_LAT, DIM_LON])["areacella"]
-        fig, ax = plt.subplots(figsize=(4.5, 4), layout="constrained")
-        for ltype in land_types:
-            ds = self.area_weighted_cell_obj[ltype]
-            annual_ds = ds.sel(time=ds.time.dt.month.isin([12]))
-            annual_rate = (annual_ds.sum(dim=[DIM_LAT, DIM_LON])) / total_larea * 1e2
-            annual_rate.plot(ax=ax, label=ltype, linewidth=1.5)
-            plt.title("Annual changes of global land-use types")
-            ax.set_xlabel("Year")
-            ax.set_ylabel("(%)")
-            ax.legend(
-                fontsize="small",
-                loc="upper left",
-                ncol=1,
-                bbox_to_anchor=(1.0, 0.7),
-            )
+    # def plot_global_annual_trend(self):
+    # land_types = sorted(list(self.org_cell_objs.keys()))
+    # total_larea = self.ds_area.sum(dim=[DIM_LAT, DIM_LON])["areacella"]
+    # fig, ax = plt.subplots(figsize=(4.5, 4), layout="constrained")
+    # for ltype in land_types:
+    #     ds = self.area_weighted_cell_obj[ltype]
+    #     annual_ds = ds.sel(time=ds.time.dt.month.isin([12]))
+    #     annual_rate = (annual_ds.sum(dim=[DIM_LAT, DIM_LON])) / total_larea * 1e2
+    # annual_rate.plot(ax=ax, label=ltype, linewidth=1.5)
+    # plt.title("Annual changes of global land-use types")
+    # ax.set_xlabel("Year")
+    # ax.set_ylabel("(%)")
+    # ax.legend(
+    #     fontsize="small",
+    #     loc="upper left",
+    #     ncol=1,
+    #     bbox_to_anchor=(1.0, 0.7),
+    # )
 
     def save_2_nc(self):
         ds_sftlf = copy.deepcopy(self.ds_sftlf)

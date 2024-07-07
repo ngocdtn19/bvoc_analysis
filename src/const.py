@@ -34,7 +34,7 @@ K_2_C = 273.15
 MG_2_G = 1e-6  # convert from micro gram to gram
 MG_2_TG = 1e-18  # convert from micro gram to Teragram
 
-# LIST_REGION = ["AMZ", "SEA", "SSA", "EAS"]
+LIST_REGION_LAND = ["AMZ", "SSA", "SEA", "SAH", "NAU"]
 REGION = regionmask.defined_regions.srex
 LIST_REGION = [REGION.regions[i].abbrev for i in REGION.regions.keys()]
 # LIST_COLOR = get_colors(len(LIST_REGION))

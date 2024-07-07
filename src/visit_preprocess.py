@@ -37,7 +37,7 @@ def visit_t2cft(visit_nc, var_name, m_name="VISIT_ORG"):
             org_visit_ds = org_visit_ds.rename({"isopr": var_name})
 
     org_visit_ds = org_visit_ds.where(
-        org_visit_ds[var_name].sel(time=slice("1850-01", "2021-12"))
+        org_visit_ds[var_name].sel(time=slice("1850-01", "2014-12"))
     )
     org_visit_ds = org_visit_ds.where(org_visit_ds[var_name] != -9999.0)
     org_visit_ds = org_visit_ds.where(org_visit_ds[var_name] != -99999.0)
@@ -350,7 +350,7 @@ class VisitMRSOS(VisitTAS):
         self.monthly_per_area_unit = self.monthly_ds
 
 
-class VisitLAI(VisitMRSO):
+class VisitLAI(VisitTAS):
     def __init__(self, model_name, org_ds_var, var_name):
         super().__init__(model_name, org_ds_var, var_name)
 

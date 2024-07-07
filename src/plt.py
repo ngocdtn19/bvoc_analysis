@@ -8,11 +8,13 @@ import xarray as xr
 import pandas as pd
 import pickle
 
+from scipy import stats
 from scipy.stats import pearsonr
 from sklearn.metrics import mean_squared_error
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.lines import Line2D
 from mypath import *
+from CMIP6Model import *
 import mk
 
 colors_dict = {
@@ -872,8 +874,15 @@ def sup_plt_glob_rate(models):
     )
 
 
-# plot Fig. S5 - Global annual anomalies of tas, rsds, pr --> not yet done
-def plt_clim_annual_anomaly(tas, rsds, pr):
+# sup plt Fig. S3 - SREX regions
+def sup_plt_srex_regions():
+    text_kws = dict(color="#67000d", fontsize=9, bbox=dict(pad=0.2, color="w"))
+    regionmask.defined_regions.srex.plot(label="abbrev", text_kws=text_kws)
+    plt.tight_layout()
+
+
+# sup plt Fig. S5 - Global annual anomalies of tas, rsds, pr
+def sup_plt_clim_annual_anomaly(tas, rsds, pr):
     model_names = list(tas.multi_models.keys())
     colors = [
         "#94C973",
@@ -937,6 +946,379 @@ def plt_clim_annual_anomaly(tas, rsds, pr):
         bbox_to_anchor=(0.5, 0),
         fontsize=legend_sz,
     )
+
+
+# sup plt Fig. S6 - Global mean annual LAI of CESM2-WACM(G2012), NorESM2-LM(G2012), VISIT-S3(G1997) and GPP of UKESM1-0-LL(P2011)
+def sup_plt_lai_gpp_corr(lai, gpp):
+    model_names = [
+        "CESM2-WACCM(G2012)",
+        "NorESM2-LM(G2012)",
+        "VISIT-S3(G1997)",
+        "UKESM1-0-LL(P2011)",
+    ]
+    colors = [
+        "#94C973",
+        "#478C5C",
+        "#e41a1c",
+        "#9467BD",
+    ]
+    colors_dict = {
+        m_name: c for m_name, c in zip(model_names, colors[: len(model_names)])
+    }
+    list_index = [
+        "(a) ",
+        "(b) ",
+        "(c) ",
+    ]
+    rows = 3
+    cols = 1
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        sharex=True,
+        figsize=(7 * cols, 4 * rows),
+        layout="constrained",
+    )
+    for i, (m, t) in enumerate(zip(model_names[:3], list_index)):
+        r = i % rows
+        ax = axes[r]
+
+        ev_ds = gpp.multi_models["UKESM1-0-LL(P2011)"]
+        cv_ds = lai.multi_models[m]
+        x1, y1 = (
+            cv_ds.global_rate["year"].sel(year=slice(1850, 2014)),
+            cv_ds.global_rate.sel(year=slice(1850, 2014)),
+        )
+        x2, y2 = ev_ds.global_rate["year"], ev_ds.global_rate
+        r, p = stats.pearsonr(y1, y2)
+        ax.plot(
+            x1,
+            y1,
+            linewidth=2.5,
+            color=colors_dict[m],
+            ls="--",
+        )
+        twin = ax.twinx()
+        twin.plot(
+            x2,
+            y2,
+            linewidth=2.5,
+            color=colors_dict["UKESM1-0-LL(P2011)"],
+        )
+        ax.set_xlabel(" ")
+        ax.set_ylabel(
+            VIZ_OPT[lai.var_name]["line_bar_unit"],
+            color=colors_dict[m],
+            fontsize=unit_sz,
+            fontweight="bold",
+        )
+        twin.set_ylabel(
+            VIZ_OPT[gpp.var_name]["line_bar_unit"],
+            color=colors_dict["UKESM1-0-LL(P2011)"],
+            fontsize=unit_sz,
+            fontweight="bold",
+        )
+        ax.set_title(t, loc="left", fontsize=title_sz)
+        ax.annotate(
+            f"r = {np.round(r, decimals=3)}\np = {np.round(p, decimals=3)}",
+            (0.85, 1.02),
+            xycoords="axes fraction",
+            fontsize=unit_sz,
+        )
+        legend_elements = [
+            Line2D(
+                [0],
+                [0],
+                color="#94C973",
+                ls="--",
+                lw=2.5,
+                label="lai - CESM2-WACCM(G2012)",
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="#478C5C",
+                ls="--",
+                lw=2.5,
+                label="lai - NorESM2-LM(G2012)",
+            ),
+            Line2D(
+                [0],
+                [0],
+                color="#e41a1c",
+                ls="--",
+                lw=2.5,
+                label="lai - VISIT-S3(G1997)",
+            ),
+            Line2D([0], [0], color="#9467BD", lw=2.5, label="gpp - UKESM1-0-LL(P2011)"),
+        ]
+        fig.legend(
+            handles=legend_elements,
+            ncol=2,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0),
+            fontsize=legend_sz,
+        )
+
+
+# sup plt Fig. S7 - Spatial distribution of annual trends of clim variables --> not yet checked
+def sup_plt_glob_trends_map_clim(tas, rsds, pr):
+    list_models = [
+        "VISIT-S3(G1997)",
+        "CESM2-WACCM(G2012)",
+        "NorESM2-LM(G2012)",
+        "GFDL-ESM4(G2006)",
+        "GISS-E2.1-G(G1995)",
+        "UKESM1-0-LL(P2011)",
+    ]
+    list_var = ["tas", "rsds", "pr"]
+    cmap = "bwr"
+    rows = 6
+    cols = 3
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(16, 16),
+        layout="constrained",
+        subplot_kw=dict(projection=ccrs.PlateCarree()),
+    )
+    # calculate mk trends
+    for i, v in enumerate(list_var):
+        if v == "tas":
+            ds = tas
+            vmin, vmax = -0.01, 0.01
+            unit = "[$^{\circ}C yr^{-1}$]"
+        elif v == "rsds":
+            ds = rsds
+            vmin, vmax = -0.1, 0.1
+            unit = "[$W m^{-2} yr^{-1}$]"
+        else:
+            ds = pr
+            vmin, vmax = -0.005, 0.005
+            unit = "[$mm day^{-1} yr^{-1}$]"
+
+        for j, m in enumerate(list_models):
+            slope_ds = cal_org_trends_map(ds, v, m)
+            data = slope_ds[list(slope_ds.keys())[0]]
+            ax = axes[j, i]
+            ax.coastlines()
+            if "VISIT" in m:
+                data = data.sel(lat=slice(82.75, -55.25))
+            else:
+                data = data.sel(lat=slice(-55.25, 82.75))
+            data.plot.pcolormesh(
+                ax=ax,
+                cmap=cmap,
+                levels=11,
+                vmin=vmin,
+                vmax=vmax,
+                add_colorbar=False,
+            )
+            if i == 0:
+                ax.set_title(
+                    m,
+                    fontsize=legend_sz,
+                    rotation=90,
+                    ha="left",
+                    va="center",
+                    x=-0.05,
+                    y=0.5,
+                    fontweight="bold",
+                )
+            if j == 5:
+                bounds = np.arange(vmin, vmax + vmax * 0.2, vmax * 0.2)
+                norm = mpl.colors.BoundaryNorm(bounds, mpl.cm.plasma.N, extend="both")
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                cbar = fig.colorbar(sm, ax=axes[j, i], shrink=0.9, location="bottom")
+                cbar.set_label(label=unit, size=unit_sz)
+
+    axes[0, 0].annotate(
+        "(a) Temperature",
+        xy=(0.27, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    axes[0, 1].annotate(
+        "(b) Shortwave radiation",
+        xy=(0.17, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    axes[0, 2].annotate(
+        "(c) Precipitation",
+        xy=(0.27, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+
+
+# sup plt Fig. S8 - Spatial distribution of mean annual fraction (%) of four PFTs over 2000-2014
+def sup_plt_land_map():
+    list_models = [
+        "CESM2-WACCM",
+        "GFDL-ESM4",
+        "GISS-E2.1-G",
+        "UKESM1-0-LL",
+    ]
+    list_au = ["(G2012)", "(G2006)", "(G1995)", "(P2011)"]
+    land_type_1 = ["treeFrac", "grassFrac", "shrubFrac", "cropFrac"]
+    land_type_2 = ["treeFrac", "grassFrac", "pastureFrac", "cropFrac"]
+    cmap = "Greens"
+    vmin, vmax = 0, 100
+    rows, cols = 4, 4
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(4 * rows, 3 * cols),
+        layout="constrained",
+        subplot_kw=dict(projection=ccrs.PlateCarree()),
+    )
+    for r, (m, au) in enumerate(zip(list_models, list_au)):
+        data = Land(model_name=m)
+        land_type = land_type_1
+        if m in ["GFDL-ESM4", "UKESM1-0-LL"]:
+            land_type = land_type_2
+        for c, ltype in enumerate(land_type):
+            ax = axes[r, c]
+            ax.coastlines()
+            ds = data.org_cell_objs[ltype]
+            ds = ds.sel(time=ds.time.dt.year.isin([i for i in range(2000, 2014 + 1)]))
+            ds = ds[ltype].mean(dim="time")
+            ds = ds.where(ds > 0)
+            ds.plot.pcolormesh(
+                ax=ax,
+                cmap="Greens",
+                levels=11,
+                vmin=vmin,
+                vmax=vmax,
+                add_colorbar=False,
+            )
+            ax.set_title("")
+            if c == 0:
+                ax.set_title(
+                    f"{m}{au}",
+                    fontsize=legend_sz,
+                    rotation=90,
+                    ha="left",
+                    va="center",
+                    x=-0.08,
+                    y=0.5,
+                    fontweight="bold",
+                )
+    bounds = np.arange(vmin, vmax + vmax * 0.1, vmax * 0.1)
+    norm = mpl.colors.BoundaryNorm(bounds, mpl.cm.plasma.N)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=axes, shrink=0.4, location="bottom")
+    cbar.set_label(label="[%]", size=unit_sz)
+    axes[0, 0].annotate(
+        "(a) treeFrac",
+        xy=(0.27, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    axes[0, 1].annotate(
+        "(b) grassFrac",
+        xy=(0.17, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    axes[0, 2].annotate(
+        "(c) shrubFrac",
+        xy=(0.27, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    axes[0, 3].annotate(
+        "(d) cropFrac",
+        xy=(0.27, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+
+
+# sup plt Fig. S4 - Global and regional annual change of land use/land cover over 1850-2014
+def sup_plt_land_rate():
+    list_models = [
+        "CESM2-WACCM",
+        "GFDL-ESM4",
+        "GISS-E2.1-G",
+        "UKESM1-0-LL",
+    ]
+    list_au = ["(G2012)", "(G2006)", "(G1995)", "(P2011)"]
+    rows, cols = 4, 6
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        sharex=True,
+        figsize=(3.5 * cols, 3.5 * rows),
+        layout="constrained",
+    )
+
+    for r, (m, au) in enumerate(zip(list_models, list_au)):
+        # plot glob
+        data = Land(model_name=m)
+        land_types = sorted(list(data.org_cell_objs.keys()))
+        total_larea = data.ds_area.sum(dim=[DIM_LAT, DIM_LON])["areacella"]
+        ax_glob = axes[r, 0]
+        for ltype in land_types:
+            ds = data.area_weighted_cell_obj[ltype]
+            annual_ds = ds.sel(time=ds.time.dt.month.isin([12]))
+            annual_rate = (annual_ds.sum(dim=[DIM_LAT, DIM_LON])) / total_larea * 1e2
+            annual_rate.plot(ax=ax_glob, label=ltype, linewidth=1.5)
+            ax_glob.set_title(
+                f"{m}{au}",
+                fontsize=title_sz,
+                rotation=90,
+                ha="left",
+                va="center",
+                x=-0.35,
+                y=0.5,
+                fontweight="bold",
+            )
+            ax_glob.set_xlabel("")
+            ax_glob.set_ylabel("[%]")
+            ax_glob.legend(
+                fontsize="small",
+                loc="upper left",
+                ncol=1,
+                bbox_to_anchor=(1.0, 0.7),
+            )
+
+            # plot region
+            for c, roi in enumerate(LIST_REGION_LAND):
+                ax_roi = axes[r, c + 1]
+                data.roi_ltype[roi][ltype].sel(
+                    time=data.roi_ltype[roi][ltype].time.dt.month.isin([12])
+                ).plot(ax=ax_roi, label=ltype)
+                ax_roi.set_xlabel("")
+                ax_roi.set_ylabel("")
+                ax_roi.set_title("")
+
+    axes[0, 0].annotate(
+        "(a) Global",
+        xy=(0.3, 1.1),
+        xycoords="axes fraction",
+        fontsize=title_sz,
+        fontweight="bold",
+    )
+    indexes = ["b", "c", "d", "e", "f"]
+    for i, index in enumerate(indexes):
+        axes[0, i + 1].annotate(
+            f"({index}) {LIST_REGION_LAND[i]}",
+            xy=(0.3, 1.1),
+            xycoords="axes fraction",
+            fontsize=title_sz,
+            fontweight="bold",
+        )
 
 
 # %%
