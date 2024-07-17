@@ -68,7 +68,7 @@ legend_sz = 14
 unit_sz = 12
 
 
-# Plot Fig. 1a - Mean global isoprene emission in the present day (2000-2014)
+# Plot Fig. 1a - Mean global isoprene emission for the near present day (2000-2014)
 def plt_mean_glob_pd(emiisop):
     model_names = list(emiisop.multi_models.keys())
     df = pd.DataFrame()
@@ -93,10 +93,10 @@ def plt_mean_glob_pd(emiisop):
     )
     ax.set_ylim([0, 600])
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-    ax.set_ylabel("[$TgC yr^{-1}$]", fontsize=unit_sz, fontweight="bold")
+    ax.set_ylabel("[TgC yr$^{-1}$]", fontsize=unit_sz)
 
 
-# Plot Fig. 1b - regional contribution for present-day (2000-2014)
+# Plot Fig. 1b - regional contribution for the near present-day (2000-2014)
 def plt_regional_contri(emiisop):
     l_roi = LIST_REGION
     model_names = list(emiisop.multi_models.keys())
@@ -134,12 +134,10 @@ def plt_regional_contri(emiisop):
         borderaxespad=0.0,
     )
     ax.set_ylim([0, 600])
-    ax.set_ylabel(
-        VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=unit_sz, fontweight="bold"
-    )
+    ax.set_ylabel(VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=unit_sz)
 
 
-# Plot Fig. 2 - spatial distribution of the mean annual totals of isoprene emission in the present day (2000-2014)
+# Plot Fig. 2 - spatial distribution of the mean annual isoprene emission for the near present day (2000-2014)
 def plt_glob_present_map(emiisop, cmap="YlGnBu"):
     list_models = [
         "VISIT-S3(G1997)",
@@ -190,7 +188,7 @@ def plt_glob_present_map(emiisop, cmap="YlGnBu"):
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=axes, shrink=0.5, location="bottom")
-    cbar.set_label("[$gC  m^{-2}  yr^{-1}$]", size=unit_sz)
+    cbar.set_label("[gC m$^{-2}$ yr$^{-1}$]", size=unit_sz)
 
 
 # Plot Fig. 3 - Mean annual isoprene emission by lat
@@ -226,9 +224,7 @@ def plt_pd_mean_by_lat(emiisop):
             ls=ls_dict[m_name],
         )
         ax.set_xlabel("Latitude")
-        ax.set_ylabel(
-            VIZ_OPT[emiisop.var_name]["map_unit"], fontsize=14, fontweight="bold"
-        )
+        ax.set_ylabel(VIZ_OPT[emiisop.var_name]["map_unit"], fontsize=14)
         plt.ylim([0, 5])
         ax.legend(
             loc="center",
@@ -267,9 +263,7 @@ def plt_glob_annual_variation(emiisop):
             ls=ls_dict[m_name],
         )
     ax.set_xlabel("Year")
-    ax.set_ylabel(
-        VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=14, fontweight="bold"
-    )
+    ax.set_ylabel(VIZ_OPT[emiisop.var_name]["line_bar_unit"], fontsize=14)
     ax.legend(
         loc="center",
         ncol=3,
@@ -279,7 +273,7 @@ def plt_glob_annual_variation(emiisop):
 
 def cal_org_trends_map(var_obj, var_name, model_name):
     file_mk_org = os.path.join(
-        DATA_DIR, "processed_data/mk_org", f"{model_name}_{var_name}.nc"
+        DATA_DIR, "processed_org_data/mk_trends_map", f"{model_name}_{var_name}.nc"
     )
     if not os.path.exists(file_mk_org):
         annual_ds = var_obj.multi_models[model_name].annual_per_area_unit
@@ -298,7 +292,7 @@ def cal_org_trends_map(var_obj, var_name, model_name):
 
 
 # Plot Fig.5 - Spatial distribution of isoprene emission trends from 1850 to 2014
-def plt_glob_trends_map_emiisop(emiisop, cmap="bwr"):
+def plt_emiisop_trends_map(emiisop, cmap="bwr"):
     list_models = [
         "VISIT-S3(G1997)",
         "CESM2-WACCM(G2012)",
@@ -347,11 +341,11 @@ def plt_glob_trends_map_emiisop(emiisop, cmap="bwr"):
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=axes, shrink=0.5, location="bottom")
-    cbar.set_label("[$mgC  m^{-2}  yr^{-2}$]", size=unit_sz)
+    cbar.set_label("[mgC m$^{-2}$ yr$^{-2}$]", size=unit_sz)
 
 
 # Plot Fig. 6 & Fig. 8
-def plt_glob_rate(models, visit, mode="main"):
+def plt_glob_changes_by_driver(models, visit, mode="main"):
     models["VISIT(G1997)"] = visit
     rows = 2
     cols = 3
@@ -373,8 +367,8 @@ def plt_glob_rate(models, visit, mode="main"):
         if mode == "main":
             df = models[m].main_rates_ts
             legend_elements = [
-                Line2D([0], [0], color="#762a83", lw=2.5, label="co$_2f$"),
-                Line2D([0], [0], color="#9970ab", lw=2.5, label="co$_2fi$"),
+                Line2D([0], [0], color="#762a83", lw=2.5, label="co$_2$f"),
+                Line2D([0], [0], color="#9970ab", lw=2.5, label="co$_2$fi"),
                 Line2D([0], [0], color="#b3de69", lw=2.5, label="lulcc"),
                 Line2D([0], [0], color="#fb8072", ls="-.", lw=2.5, label="clim"),
                 Line2D([0], [0], color="#66c2a5", ls="--", lw=2.5, label="all"),
@@ -397,7 +391,7 @@ def plt_glob_rate(models, visit, mode="main"):
         ax.set_title(m, fontsize=title_sz)
         if r in [0, 1]:
             axes[r, 0].set_ylabel(
-                "Isoprene emission changes [$TgC  yr^{-1}$]", fontsize=unit_sz
+                "Isoprene emission changes [TgC yr$^{-1}$]", fontsize=unit_sz
             )
 
     if mode == "main":
@@ -429,7 +423,7 @@ def plt_glob_rate(models, visit, mode="main"):
 
 
 # Plot Fig. 7 & Fig. 9
-def plt_glob_rate_drivers(models, visit, mode="main"):
+def plt_glob_trends_by_driver(models, visit, mode="main"):
     models["VISIT(G1997)"] = visit
     rows = 2
     cols = 3
@@ -472,7 +466,7 @@ def plt_glob_rate_drivers(models, visit, mode="main"):
         ax.set_ylabel("")
         if r in [0, 1]:
             axes[r, 0].set_ylabel(
-                "Isoprene emission trends [$TgC  yr^{-2}$]", fontsize=unit_sz
+                "Isoprene emission trends [TgC yr$^{-2}$]", fontsize=unit_sz
             )
         ax.set_ylim(-1, 1)
         if mode == "clim":
@@ -537,16 +531,6 @@ def plt_contri_map(models, visit, mode="main"):
             bbox_transform=axis[1].transAxes,
             borderpad=0,
         )
-        # if placing color in the left side
-        # axins = inset_axes(
-        # axis[1],
-        # width="100%",  # width: 5% of parent_bbox width
-        # height="20%",  # height: 50%
-        # loc="upper left",
-        # bbox_to_anchor=(-1.025, 1, 1, 1),
-        # bbox_transform=axis[1].transAxes,
-        # borderpad=0,
-        # )
         subfigs[0].text(0.125, 1, "(a) CO$_2$", fontsize=title_sz, fontweight="bold")
         subfigs[0].text(0.455, 1, "(b) LULCC", fontsize=title_sz, fontweight="bold")
         subfigs[0].text(0.79, 1, "(c) Climate", fontsize=title_sz, fontweight="bold")
@@ -603,7 +587,7 @@ def plt_contri_map(models, visit, mode="main"):
         )
 
     cbar = fig.colorbar(sm, cax=axins, shrink=1, orientation="horizontal")
-    cbar.set_label("[$mgC  m^{-2}  yr^{-2}$]", size=unit_sz)
+    cbar.set_label("[mgC m$^{-2}$ yr$^{-2}$]", size=unit_sz)
 
     # path_ = f"figs/IAV.jpg"
     # fig.savefig(path_, format="jpg", dpi=900, bbox_inches="tight")
@@ -651,7 +635,7 @@ def plt_max_impact_map(models, visit, mode="main"):
 
         # interpolate visit map to the model coords
         visit_land = xr.open_dataset(
-            "/mnt/dg3/ngoc/cmip6_bvoc_als/data/axl/mask/mask_fx_VISIT-S3(G1997)_historical_r1i1p1f1_gn.nc"
+            f"{DATA_DIR}/original/axl/mask/mask_fx_VISIT-S3(G1997)_historical_r1i1p1f1_gn.nc"
         )
         if m == "VISIT(G1997)":
             land_mask = visit_land.where(visit_land.mask != np.nan, 1)
@@ -713,8 +697,12 @@ def plt_max_impact_map(models, visit, mode="main"):
 
 # Plot Fig. 14
 def plt_inter_model_spreads(cmap="OrRd"):
-    cmip6_files = sorted(glob.glob(os.path.join(RES_DIR, "mk", "*.nc")))
-    visit_files = sorted(glob.glob(os.path.join(VISIT_DIR, "mk_1x1.25", "*.nc")))
+    cmip6_files = sorted(
+        glob.glob(os.path.join(CMIP6_SENSALS_DIR, "contribution_mk", "*.nc"))
+    )
+    visit_files = sorted(
+        glob.glob(os.path.join(VISIT_SENSALS_DIR, "contribution_mk/mk_1x1.25", "*.nc"))
+    )
     all_files = cmip6_files + visit_files
     list_var = ["co2f", "lulcc", "clim", "tas", "rsds", "pr"]
     list_index = [
@@ -773,7 +761,7 @@ def plt_inter_model_spreads(cmap="OrRd"):
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=axes[:, i], shrink=0.7, location="bottom")
-        cbar.set_label("[$mgC  m^{-2}  yr^{-2}$]", size=unit_sz)
+        cbar.set_label("[mgC m$^{-2}$ yr$^{-2}$]", size=unit_sz)
 
 
 # sup plt Fig S1 cross-validation
@@ -789,7 +777,7 @@ def plt_cross_val_metrics():
             l_score.append(df)
     concat_df = pd.concat(l_score, ignore_index=True)
     l_score_names = ["r2", "rmse", "mae"]
-    ylabels = [" ", "[$gC  m^{-2}  yr^{-1}$]", "[$gC  m^{-2}  yr^{-1}$]"]
+    ylabels = [" ", "[gC m$^{-2}$ yr$^{-1}$]", "[gC m$^{-2}$ yr$^{-1}$]"]
     titles = ["R$^{2}$", "RMSE", "MAE"]
     rows = 1
     cols = 3
@@ -817,7 +805,7 @@ def plt_cross_val_metrics():
 
 
 # sup plt Fig S2 RF validation
-def sup_plt_glob_rate(models):
+def sup_plt_glob_emiisop_rate(models):
     rows = 2
     cols = 3
     fig, axes = plt.subplots(
@@ -856,12 +844,12 @@ def sup_plt_glob_rate(models):
         ax.set_title(m, fontsize=title_sz)
         ax.set_ylim([350, 650])
         ax.annotate(
-            f"r = {np.round(r, decimals=3)}\nrmse = {np.round(rmse, decimals=1)}",
+            f"$r$ = {np.round(r, decimals=3)}\nRMSE = {np.round(rmse, decimals=1)}",
             (0.8, 1.03),
             xycoords="axes fraction",
         )
         if j in [0, 1]:
-            axes[j, 0].set_ylabel("[$TgC  yr^{-1}$]", fontsize=unit_sz)
+            axes[j, 0].set_ylabel("[TgC yr$^{-1}$]", fontsize=unit_sz)
     fig.delaxes(axes[-1][-1])
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(
@@ -933,9 +921,7 @@ def sup_plt_clim_annual_anomaly(tas, rsds, pr):
                 ls=ls_dict[m_name],
             )
         ax.set_xlabel(" ")
-        ax.set_ylabel(
-            VIZ_OPT[data.var_name]["line_bar_unit"], fontsize=unit_sz, fontweight="bold"
-        )
+        ax.set_ylabel(VIZ_OPT[data.var_name]["line_bar_unit"], fontsize=unit_sz)
         ax.annotate(t, (0.005, 0.025), xycoords="axes fraction", fontsize=unit_sz)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(
@@ -1010,13 +996,11 @@ def sup_plt_lai_gpp_corr(lai, gpp):
             VIZ_OPT[lai.var_name]["line_bar_unit"],
             color=colors_dict[m],
             fontsize=unit_sz,
-            fontweight="bold",
         )
         twin.set_ylabel(
             VIZ_OPT[gpp.var_name]["line_bar_unit"],
             color=colors_dict["UKESM1-0-LL(P2011)"],
             fontsize=unit_sz,
-            fontweight="bold",
         )
         ax.set_title(t, loc="left", fontsize=title_sz)
         ax.annotate(
@@ -1061,8 +1045,8 @@ def sup_plt_lai_gpp_corr(lai, gpp):
         )
 
 
-# sup plt Fig. S7 - Spatial distribution of annual trends of clim variables --> not yet checked
-def sup_plt_glob_trends_map_clim(tas, rsds, pr):
+# sup plt Fig. S7 - Spatial distribution of annual trends of clim variables
+def sup_plt_clim_trends_map(tas, rsds, pr):
     list_models = [
         "VISIT-S3(G1997)",
         "CESM2-WACCM(G2012)",
@@ -1087,15 +1071,15 @@ def sup_plt_glob_trends_map_clim(tas, rsds, pr):
         if v == "tas":
             ds = tas
             vmin, vmax = -0.01, 0.01
-            unit = "[$^{\circ}C yr^{-1}$]"
+            unit = "[$^{\circ}$C yr$^{-1}$]"
         elif v == "rsds":
             ds = rsds
             vmin, vmax = -0.1, 0.1
-            unit = "[$W m^{-2} yr^{-1}$]"
+            unit = "[W m$^{-2}$ yr$^{-1}$]"
         else:
             ds = pr
             vmin, vmax = -0.005, 0.005
-            unit = "[$mm day^{-1} yr^{-1}$]"
+            unit = "[mm day$^{-1}$ yr$^{-1}$]"
 
         for j, m in enumerate(list_models):
             slope_ds = cal_org_trends_map(ds, v, m)
@@ -1246,7 +1230,7 @@ def sup_plt_land_map():
 
 
 # sup plt Fig. S4 - Global and regional annual change of land use/land cover over 1850-2014
-def sup_plt_land_rate():
+def sup_plt_land_changes():
     list_models = [
         "CESM2-WACCM",
         "GFDL-ESM4",

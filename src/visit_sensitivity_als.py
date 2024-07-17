@@ -12,8 +12,8 @@ import pymannkendall as pymk
 from const import *
 from mypath import *
 from mk import *
-from senAls_mulLinear import cal_actual_rate
-from senAls_utils import prep_area
+
+from senAls_utils import *
 from utils import *
 from copy import deepcopy
 
@@ -31,7 +31,11 @@ def cal_mk(ds, var_name):
 
 
 class VisitSenAls:
-    base_dir = VISIT_DIR
+    """
+    Analysis of emulated sensitivity experiments on isoprene emissions for the VISIT model
+    """
+
+    base_dir = VISIT_SENSALS_DIR
     list_sim = [
         "control",
         "co2f",
@@ -48,7 +52,9 @@ class VisitSenAls:
         self.var_name = var_name
 
         self.files = {
-            var: os.path.join(self.base_dir, f"VISIT-SH{i}_{self.var_name}.nc")
+            var: os.path.join(
+                self.base_dir, "input_data", f"VISIT-SH{i}_{self.var_name}.nc"
+            )
             for i, var in enumerate(self.list_sim, 0)
         }
 
@@ -157,9 +163,11 @@ class VisitSenAls:
         list_driver = self.list_main_driver + self.clim_predictors
         for v in list_driver:
             print(v)
-            file_path_org = os.path.join(self.base_dir, "mk_0.5x0.5", f"{v}.nc")
+            file_path_org = os.path.join(
+                self.base_dir, "contribution_mk", "mk_0.5x0.5", f"{v}.nc"
+            )
             file_path_interp = os.path.join(
-                self.base_dir, "mk_1x1.25", f"VISIT(G1997)_{v}.nc"
+                self.base_dir, "contribution_mk", "mk_1x1.25", f"VISIT(G1997)_{v}.nc"
             )
             if os.path.exists(file_path_org):
                 ds = xr.open_dataset(file_path_org)
@@ -229,4 +237,3 @@ class VisitSenAls:
 
 
 # %%
-visit = VisitSenAls()

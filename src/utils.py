@@ -15,6 +15,13 @@ from mypath import *
 
 
 def clip_region_mask(ds, region_name="SEA"):
+    """Clip the xarray ds for the SREX regions
+    Param:
+        Original xarray ds
+        Region name
+    Return:
+        Clipped xarray ds
+    """
     # print(region_name)
 
     region_mask = regionmask.defined_regions.srex[[region_name]]
@@ -128,7 +135,7 @@ def get_equiv_lf(model_name):
     Return:
         xarray ds of the area
     """
-    for f in LF_LIST:
+    for f in SFLTF_LIST:
         if model_name in f:
             return xr.open_dataset(f)
 
@@ -303,6 +310,13 @@ def clip_to_roi(ds, var=VAR_ISOP):
 
 
 def interpolate(ds, mode="gfdl"):
+    """Interpolate xarray ds to GFDL or VISIT spatial resolution
+    Param:
+        Original xarray ds
+        mode (GFDL or VISIT model's spatial resolution)
+    Return:
+        xarray.DataArray: interpolated ds
+    """
     # interpolated_ds = ds.interp(lat=lat, lon=lon)
     # if ds have nan values
     lat_file, lon_file = GFDL_LAT_FILE, GFDL_LONG_FILE
@@ -313,82 +327,13 @@ def interpolate(ds, mode="gfdl"):
     return ds.interp(lat=lat, lon=lon, kwargs={"fill_value": "extrapolate"})
 
 
-def y2p(p):
-    s, e = p
-    ys = 1850
-
-    m_s = (s - ys) * 12
-    m_e = (e - ys + 1) * 12 - 1
-    return m_s, m_e
-
-
-def txt_2_nc(txt_file):
-    # convert from txt file to netCDF4 at original resolution
-
-    txt_file = np.loadtxt(
-        "/mnt/dg3/ngoc/data_other/IGBP-SurfaceProducts_569/data/IGBP_wp.dat",
-        delimiter=" ",
-    )
-    wiltpoint = []
-    wiltpoint[:] = txt_file[:]
-    latitudes = np.arange(-56.5, 84.0, 1 / 12)
-    latitudes = latitudes[::-1]
-    longitudes = np.arange(-180.0, 180.0, 1 / 12)
-    ds = xr.Dataset(
-        data_vars=dict(
-            wiltpoint=(["lat", "lon"], wiltpoint),
-        ),
-        coords=dict(
-            lon=(longitudes),
-            lat=(latitudes),
-        ),
-        attrs=dict(description="Global IGBP wilting point at 0.0833333 degree"),
-    )
-    ds = ds.where(ds["wiltpoint"] != -2)
-    ds = ds.fillna(-9999.0)
-    org_nc_file = ds.to_netcdf(
-        path="/mnt/dg3/ngoc/data_other/IGBP-SurfaceProducts_569/data/IGBP_wp_org.nc",
-        mode="w",
-        format="NETCDF4",
-    )
-
-    # convert to VISIT resolution
-    ds = ds.where(ds["wiltpoint"] != -9999)
-    interp_lat = np.load(VISIT_LAT_FILE)
-    interp_lon = np.load(VISIT_LONG_FILE)
-
-    interpolated_ds = ds["wiltpoint"].interp(lat=interp_lat, lon=interp_lon)
-    interpolated_ds = interpolated_ds / 1000
-    interpolated_ds = interpolated_ds.fillna(-9999.0)
-    inter_ds = xr.Dataset(
-        data_vars=dict(
-            wiltpoint=(["lat", "lon"], interpolated_ds.values),
-        ),
-        coords=dict(
-            lon=(interp_lon),
-            lat=(interp_lat),
-        ),
-        attrs=dict(
-            description="Global IGBP wilting point at 0.5 degree, fillna = -9999.0"
-        ),
-    )
-    inter_nc_file = inter_ds.to_netcdf(
-        path="/mnt/dg3/ngoc/data_other/IGBP-SurfaceProducts_569/data/IGBP_wp_0.5.nc",
-        mode="w",
-        format="NETCDF4",
-    )
-    df = inter_ds["wiltpoint"].values
-    df = pd.DataFrame(df.flatten())
-    inter_txt_file = df.to_csv(
-        "/mnt/dg3/ngoc/data_other/IGBP-SurfaceProducts_569/data/wp_2visit.dat",
-        header=None,
-        index=None,
-    )
-
-    return org_nc_file, inter_nc_file, inter_txt_file
-
-
 def resample(folder):
+    """Resample folder containing xarray ds to GFDL model's spatial resolution
+    Param:
+        Folder path containing xarray ds
+    Return:
+        New folder containing resampled xarray ds
+    """
     int_folder = "1x125deg"
     path = os.path.join(DATA_SERVER, folder)
 

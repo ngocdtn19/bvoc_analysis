@@ -12,6 +12,12 @@ from mypath import *
 
 
 def year_2_cft(dcm_year):
+    """Convert the decimal year to cftime format
+    Param:
+        decimal year
+    Return:
+        cftime
+    """
     year = int(dcm_year)
     rem = dcm_year - year
 
@@ -26,6 +32,15 @@ def year_2_cft(dcm_year):
 
 
 def visit_t2cft(visit_nc, var_name, m_name="VISIT_ORG"):
+    """Convert the VISIT data's decimal year to cftime format for consistency with CMIP6 data
+        Rename to emiisop and extract data over 1850-2014 as same as CMIP6 data
+    Param:
+        visit_nc: VISIT netcdf files
+        var_name: variable name
+        m_name: VISIT model version
+    Return:
+        xarray.Dataset: original VISIT ds with format same as original CMIP6 data
+    """
     org_visit_ds = xr.open_dataset(visit_nc, decode_times=False)
     cft = [year_2_cft(org_time) for org_time in org_visit_ds.time.values]
     org_visit_ds.coords["time"] = cft
@@ -45,6 +60,12 @@ def visit_t2cft(visit_nc, var_name, m_name="VISIT_ORG"):
 
 
 def grid_area(lat1, lat2, lon1, lon2):
+    """Calculate a grid area from lat, lon
+    Param:
+        lat1, lat2, lon1, lon2: latitude and longtitude of grid
+    Return:
+        float: area
+    """
     E_RAD = 6378137.0
     # m, GRS-80(revised)
     E_FLAT = 298.257
@@ -96,7 +117,15 @@ def grid_area(lat1, lat2, lon1, lon2):
     return area
 
 
-def cal_ds_area(visit_nc="../data/VISIT/visit_20160105_BVOCisprn.nc"):
+def cal_ds_area(
+    visit_nc=f"{DATA_DIR}/original/var/emiisop/emiisop_AERmon_VISIT-S3(G1997)_historical_r1i1p1f1_gn_170001-202112.nc",
+):
+    """Calculate grid area of VISIT and write to a netcdf file with same format as CMIP6 data
+    Param:
+        visit_nc: emiisop data of VISIT in netcdf
+    Return:
+        xarray.Dataset: grid area
+    """
     ds = xr.open_dataset(visit_nc, decode_times=False)
     nlat = ds.lat.values.reshape(-1)
     nlon = ds.lon.values.reshape(-1)
@@ -125,25 +154,36 @@ def cal_ds_area(visit_nc="../data/VISIT/visit_20160105_BVOCisprn.nc"):
 # def save_2_nc(org_visit_ds):
 #     var_name = "emiisop"
 #     m_name = "VISIT"
-#     org_visit_ds.to_netcdf(f"../data/var/{var_name}/{var_name}_AERmon_{m_name}_historical_r1i1p1f1_gn_190101-201512.nc")
+#     org_visit_ds.to_netcdf(f"{DATA_DIR}/original/var/{var_name}/{var_name}_AERmon_{m_name}_historical_r1i1p1f1_gn_190101-201512.nc")
 
 
-class CMIP6Visit(CMIP6Var):
+class VisitEMIISOP(CMIP6Var):
     def __init__(self, model_name, org_ds_var, var_name):
         super().__init__(model_name, org_ds_var, var_name)
-        # self.cal_y10_rate()
 
     # def get_ds_sftlf(self):
     #     return
 
     def cal_monthly_per_area_unit(self):
+        """Calculate the monthly per area unit (gC m⁻² month⁻¹) from original data (microgC m⁻² month⁻¹)
+        Return:
+           xarray.Dataset: monthly per area unit ds of emission in units of gC m⁻² month⁻¹
+        """
         self.monthly_per_area_unit = self.org_ds_var[self.var_name] * MG_2_G
 
     def cal_annual_per_area_unit(self):
+        """Calculate the annual per area unit ds from monthly per area unit data (gC m⁻² month⁻¹)
+        Return:
+           xarray.Dataset: annual per area unit ds of emission in units of gC m⁻² yr⁻¹
+        """
         ds = self.monthly_per_area_unit
         self.annual_per_area_unit = ds.groupby(ds.time.dt.year).sum(skipna=True)
 
     def cal_monthly_ds(self):
+        """Calculate the monthly ds of emission from original data (microgC m⁻² month⁻¹)
+        Return:
+           xarray.Dataset: monthly ds of emission in units of TgC month⁻¹
+        """
         reindex_ds_var = self.org_ds_var[self.var_name].reindex_like(
             self.ds_area[VAR_AREA], method="nearest", tolerance=0.01
         )
@@ -153,23 +193,6 @@ class CMIP6Visit(CMIP6Var):
         ds = self.monthly_ds
         self.annual_ds = ds.groupby(ds.time.dt.year).sum(skipna=True)
 
-    # def cal_y10_rate(self):
-    #     y10 = []
-    #     y10_rate = []
-    #     interval = 10
-    #     l = int(len(self.years) / interval) - 1
-
-    #     for i in range(0, l):
-    #         y10.append(self.years[interval * i])
-    #         y10_rate.append(
-    #             np.mean(self.global_rate[interval * i : interval * (i + 1)]).item()
-    #         )
-
-    #     y10.append(self.years[(l) * interval])
-    #     y10_rate.append(np.mean(self.global_rate[interval * (l - 1) :]).item())
-
-    #     self.y10_rate = {"years": y10, "y10_rate": y10_rate}
-
     def cal_reg_ann_rate(self):
         clipped_ds = self.clip_2_roi_ds()
         for roi in clipped_ds:
@@ -178,29 +201,6 @@ class CMIP6Visit(CMIP6Var):
 
             self.regional_ds[roi] = ann_ds_roi
             self.regional_rate[roi] = ann_ds_roi.sum(dim=[DIM_LAT, DIM_LON])
-            self.regional_mean_1850_2014[roi] = self.regional_rate[roi].mean(
-                skipna=True
-            )
-            self.regional_rate_anml[roi] = (
-                self.regional_rate[roi] - self.regional_mean_1850_2014[roi]
-            )
-
-    def cal_reg_ss_rate(self):
-        clipped_ds = self.clip_2_roi_ds()
-        for roi in clipped_ds:
-            mon_ds_roi = clipped_ds[roi]
-            ss_ds_roi = mon_ds_roi.resample(time="QS-DEC").mean(skipna=True)
-            self.regional_ss_rate[roi] = (
-                ss_ds_roi.groupby("time")
-                .sum(dim=[DIM_LAT, DIM_LON])
-                .reset_coords(["spatial_ref"], drop=True)
-            )
-            self.regional_ss_rate_anml[roi] = self.regional_ss_rate[roi].groupby(
-                "time.month"
-            ) - self.regional_ss_rate[roi].groupby("time.month").mean(skipna=True)
-            self.regional_ss_rate_anml[roi] = self.regional_ss_rate_anml[
-                roi
-            ].reset_coords(["month"], drop=True)
 
 
 class VisitTAS(CMIP6Var):
@@ -208,10 +208,10 @@ class VisitTAS(CMIP6Var):
         super().__init__(model_name, org_ds_var, var_name)
 
     def cal_monthly_ds(self):
-        # self.monthly_ds = copy.deepcopy(self.org_ds_var[self.var_name])
-        # recheck global estimate based on grid area - 04/03/2024
-        # total_area = self.ds_area[VAR_AREA].sum().item()
-
+        """Calculates the area-weighted monthly mean temperature (°C) from orginal data (°C)
+        Return:
+           xarray.Dataset: monthly ds of temperature in degrees Celsius (°C)
+        """
         reindex_ds_var = self.org_ds_var[self.var_name].reindex_like(
             self.ds_area[VAR_AREA], method="nearest", tolerance=0.01
         )
@@ -226,11 +226,6 @@ class VisitTAS(CMIP6Var):
         self.monthly_per_area_unit = copy.deepcopy(self.org_ds_var[self.var_name])
 
     def cal_annual_ds(self):
-        # ws = np.cos(np.deg2rad(self.org_ds_var.lat))
-        # ds = self.monthly_ds[:]
-        # ds = ds.groupby(ds.time.dt.year).mean("time")
-        # self.annual_ds = ds.weighted(ws)
-        # recheck global estimate based on grid area - 04/03/2024
         ds = self.monthly_ds[:]
         self.annual_ds = ds.groupby(ds.time.dt.year).mean("time", skipna=True)
 
@@ -240,37 +235,7 @@ class VisitTAS(CMIP6Var):
             "time", skipna=True
         )
 
-    # def cal_global_seasonal_rate(self):
-    #     ds = self.seasonal_ds
-    #     ws = np.cos(np.deg2rad(self.org_ds_var.lat))
-    #     self.global_seasonal_rate = ds.weighted(ws).mean(dim=[DIM_LAT, DIM_LON])
-    #     self.global_seasonal_rate_anml = (
-    #         ds.weighted(ws).mean(dim=[DIM_LAT, DIM_LON]).groupby("time.month")
-    #         - ds.weighted(ws).mean(dim=[DIM_LAT, DIM_LON]).groupby("time.month").mean()
-    #     )
-
-    # def cal_glob_rate(self):
-    #     self.global_rate = self.annual_ds.sum(dim=[DIM_LAT, DIM_LON], skipna=True)
-    #     self.global_rate_anml = self.global_rate - self.global_rate.mean(skipna=True)
-
     def cal_reg_ann_rate(self):
-        # clipped_ds = self.clip_2_roi_ds()
-        # for roi in clipped_ds:
-        #     mon_ds_roi = clipped_ds[roi]
-        #     ann_ds_roi = mon_ds_roi.groupby(mon_ds_roi.time.dt.year).mean(skipna=True)
-        #     ws = np.cos(np.deg2rad(ann_ds_roi.lat))
-        #     ann_ds_roi = ann_ds_roi.weighted(ws)
-
-        #     self.regional_ds[roi] = ann_ds_roi
-        #     self.regional_rate[roi] = ann_ds_roi.mean(
-        #         dim=[DIM_LAT, DIM_LON], skipna=True
-        #     )
-        #     self.regional_mean_1850_2014[roi] = self.regional_rate[roi].mean(
-        #         skipna=True
-        #     )
-        #     self.regional_rate_anml[roi] = (
-        #         self.regional_rate[roi] - self.regional_mean_1850_2014[roi]
-        #     )
         clipped_ds = self.clip_2_roi_ds()
         clipped_area = self.clip_2_roi_area()
         for roi in clipped_ds:
@@ -282,72 +247,11 @@ class VisitTAS(CMIP6Var):
             self.regional_rate[roi] = ann_ds_roi.sum(
                 dim=[DIM_LAT, DIM_LON], skipna=True
             )
-            self.regional_mean_1850_2014[roi] = self.regional_rate[roi].mean(
-                skipna=True
-            )
-            self.regional_rate_anml[roi] = (
-                self.regional_rate[roi] - self.regional_mean_1850_2014[roi]
-            )
-
-    def cal_reg_ss_rate(self):
-        # clipped_ds = self.clip_2_roi_ds()
-        # for roi in clipped_ds:
-        #     mon_ds_roi = clipped_ds[roi]
-        #     ss_ds_roi = mon_ds_roi.resample(time="QS-DEC").mean(skipna=True)
-        #     ws = np.cos(np.deg2rad(ss_ds_roi.lat))
-
-        #     self.regional_ss_rate[roi] = ss_ds_roi.weighted(ws).mean(
-        #         dim=[DIM_LAT, DIM_LON]
-        #     )
-        #     self.regional_ss_rate_anml[roi] = self.regional_ss_rate[roi].groupby(
-        #         "time.month"
-        #     ) - self.regional_ss_rate[roi].groupby("time.month").mean(skipna=True)
-
-        clipped_ds = self.clip_2_roi_ds()
-        clipped_area = self.clip_2_roi_area()
-        for roi in clipped_ds:
-            roi_area = clipped_area[roi].sum(dim=[DIM_LAT, DIM_LON])
-            mon_ds_roi = clipped_ds[roi] * self.glob_land_area / roi_area
-            ss_ds_roi = mon_ds_roi.resample(time="QS-DEC").mean(skipna=True)
-            self.regional_ss_rate[roi] = (
-                ss_ds_roi.groupby("time")
-                .sum(dim=[DIM_LAT, DIM_LON])
-                .reset_coords(["spatial_ref"], drop=True)
-            )
-            self.regional_ss_rate_anml[roi] = self.regional_ss_rate[roi].groupby(
-                "time.month"
-            ) - self.regional_ss_rate[roi].groupby("time.month").mean(skipna=True)
-            self.regional_ss_rate_anml[roi] = self.regional_ss_rate_anml[
-                roi
-            ].reset_coords(["month"], drop=True)
 
 
 class VisitRSDS(VisitTAS):
     def __init__(self, model_name, org_ds_var, var_name):
         super().__init__(model_name, org_ds_var, var_name)
-
-
-class VisitMRSO(VisitTAS):
-    def __init__(self, model_name, org_ds_var, var_name):
-        super().__init__(model_name, org_ds_var, var_name)
-
-    def cal_monthly_ds(self):
-        self.monthly_ds = self.org_ds_var[self.var_name].where(
-            self.org_ds_var[self.var_name] > 0
-        )
-
-
-class VisitMRSOS(VisitTAS):
-    def __init__(self, model_name, org_ds_var, var_name):
-        super().__init__(model_name, org_ds_var, var_name)
-
-    def cal_monthly_ds(self):
-        self.monthly_ds = self.org_ds_var[self.var_name].where(
-            self.org_ds_var[self.var_name] > 0
-        )
-
-    def cal_monthly_per_area_unit(self):
-        self.monthly_per_area_unit = self.monthly_ds
 
 
 class VisitLAI(VisitTAS):
@@ -363,6 +267,11 @@ class VisitPR(VisitTAS):
         self.nodays_m = self.org_ds_var.time.dt.days_in_month
 
     def cal_monthly_ds(self):
+        """Calculate the area-weighted monthly ds of precipitation from original data (mm month⁻¹)
+           This data will be used to calculate annual ds and global rate
+        Return:
+           xarray.Dataset: monthly ds of precipitation in units of mm day⁻¹
+        """
         monthly_ds = self.org_ds_var[self.var_name] / self.nodays_m
         self.monthly_ds = (
             monthly_ds
@@ -375,27 +284,30 @@ class VisitPR(VisitTAS):
         self.monthly_per_area_unit = self.org_ds_var[self.var_name] / self.nodays_m
 
 
-class VisitGPP(CMIP6Visit):
+class VisitGPP(VisitEMIISOP):
     def __init__(self, model_name, org_ds_var, var_name):
         super().__init__(model_name, org_ds_var, var_name)
 
     def cal_monthly_per_area_unit(self):
+        """Calculate the monthly per area unit of GPP from original data (MgC ha⁻¹ month⁻¹)
+        Return:
+           xarray.Dataset: monthly per area unit of GPP in units of gC m⁻² month⁻¹
+        """
         self.monthly_per_area_unit = (
             self.org_ds_var[self.var_name] * 1e2
         )  # convert unit from Megagram per ha to gram per m2
 
     def cal_monthly_ds(self):
+        """Calculate the monthly ds of GPP from original data (MgC ha⁻¹ month⁻¹)
+        Return:
+           xarray.Dataset: monthly ds of GPP in units of PgC month⁻¹
+        """
         reindex_ds_var = self.org_ds_var[self.var_name].reindex_like(
             self.ds_area[VAR_AREA], method="nearest", tolerance=0.01
         )
         self.monthly_ds = (
             self.ds_area[VAR_AREA] * reindex_ds_var * 1e-13
         )  # convert unit to Petagram
-
-
-class VisitBVOC(CMIP6Visit):
-    def __init__(self, model_name, org_ds_var, var_name):
-        super().__init__(model_name, org_ds_var, var_name)
 
 
 class VisitCO2s(VisitTAS):

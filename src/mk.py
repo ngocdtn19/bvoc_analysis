@@ -4,12 +4,13 @@ import numpy as np
 
 
 def k_cor(x, y, pthres=0.05, direction=True):
-    """
-    Uses the pymannkendall module to calculate a Kendall correlation test
-    :x vector: Input pixel vector to run tests on
-    :y vector: The date input vector
-    :pthres: Significance of the underlying test
-
+    """Uses the pymannkendall module to calculate a Kendall correlation test
+    Param:
+        x vector: Input pixel vector to run tests on
+        y vector: The date input vector
+        pthres: Significance of the underlying test
+    Return:
+        xarray.Dataset: slope
     """
 
     # Check NA values

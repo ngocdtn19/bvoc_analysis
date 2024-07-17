@@ -2,7 +2,7 @@ from CMIP6Model import *
 
 
 def prep_area(ds, model_name):
-    base_dir = "/mnt/dg3/ngoc/cmip6_bvoc_als/data/axl/areacella"
+    base_dir = f"{DATA_DIR}/original/axl/areacella"
     fname = (
         "areacella_fx_GFDL-ESM4_historical_r1i1p1f1_gr1.nc"
         if "VISIT" not in model_name
@@ -23,8 +23,6 @@ def cal_actual_rate(ds, model_name, mode="diff"):
 
     global_rate = global_map.sum(dim=["lat", "lon"])
     global_rate = global_rate.item() if mode == "diff" else global_rate
-    # global_map = ds
-    # global_rate = global_map.mean(dim=["lat", "lon"]).item()
 
     return global_rate, global_map
 
